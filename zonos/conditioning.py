@@ -64,8 +64,20 @@ from kanjize import number2kanji
 from phonemizer.backend import EspeakBackend
 from sudachipy import Dictionary, SplitMode
 
-if sys.platform == "darwin":
+# --- START: Added platform-specific espeak-ng location ---
+# Set espeak-ng library path for specific platforms to help phonemizer find it.
+if sys.platform == "darwin":  # macOS
     os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = "/opt/homebrew/lib/libespeak-ng.dylib"
+elif sys.platform == "win32":  # Windows
+    espeak_path = "C:\\Program Files\\eSpeak NG\\libespeak-ng.dll"
+    # Check if the default installation path exists before setting the environment variable.
+    if os.path.exists(espeak_path):
+        print(f"Found espeak-ng library at: {espeak_path}")
+        os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeak_path
+    else:
+        print(f"Warning: espeak-ng not found at the default location: {espeak_path}")
+        print("The application might fail if espeak-ng is not in your system's PATH.")
+# --- END: Added platform-specific espeak-ng location ---
 
 # --- Number normalization code from https://github.com/daniilrobnikov/vits2/blob/main/text/normalize_numbers.py ---
 
