@@ -1,7 +1,10 @@
 import torch
 import torchaudio
+import argparse
 import gradio as gr
 from os import getenv
+import os
+from datetime import datetime
 
 from zonos.model import Zonos, DEFAULT_BACKBONE_CLS as ZonosBackbone
 from zonos.conditioning import make_cond_dict, supported_language_codes
@@ -135,7 +138,6 @@ def generate_audio(
     seed = int(seed)
     max_new_tokens = 86 * 30
 
-    # This is a bit ew, but works for now.
     global SPEAKER_AUDIO_PATH, SPEAKER_EMBEDDING
 
     if randomize_seed:
@@ -159,7 +161,6 @@ def generate_audio(
         audio_prefix_codes = selected_model.autoencoder.encode(wav_prefix.unsqueeze(0))
 
     emotion_tensor = torch.tensor(list(map(float, [e1, e2, e3, e4, e5, e6, e7, e8])), device=device)
-
     vq_val = float(vq_single)
     vq_tensor = torch.tensor([vq_val] * 8, device=device).unsqueeze(0)
 
@@ -198,6 +199,24 @@ def generate_audio(
 
     wav_out = selected_model.autoencoder.decode(codes).cpu().detach()
     sr_out = selected_model.autoencoder.sampling_rate
+
+    # --- START: Code to save audio automatically ---
+    output_dir = "outputs"
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_text = "".join(c for c in text[:30] if c.isalnum() or c in (' ', '_')).rstrip().replace(' ', '_')
+    filename = f"{timestamp}_seed{seed}_{safe_text}.wav"
+    filepath = os.path.join(output_dir, filename)
+
+    save_tensor = wav_out.clone()
+    # FIX: Squeeze the batch dimension out of the tensor before saving
+    if save_tensor.dim() == 3:
+        save_tensor = save_tensor.squeeze(0)
+
+    torchaudio.save(filepath, save_tensor, sr_out)
+    print(f"Generated audio saved to: {filepath}")
+    # --- END: Code to save audio automatically ---
+
     if wav_out.dim() == 2 and wav_out.size(0) > 1:
         wav_out = wav_out[0:1, :]
     return (sr_out, wav_out.squeeze().numpy()), seed
@@ -269,7 +288,6 @@ def build_interface():
                 with gr.Column():
                     gr.Markdown("### NovelAi's unified sampler")
                     linear_slider = gr.Slider(-2.0, 2.0, 0.5, 0.01, label="Linear (set to 0 to disable unified sampling)", info="High values make the output less random.")
-                    #Conf's theoretical range is between -2 * Quad and 0.
                     confidence_slider = gr.Slider(-2.0, 2.0, 0.40, 0.01, label="Confidence", info="Low values make random outputs more random.")
                     quadratic_slider = gr.Slider(-2.0, 2.0, 0.00, 0.01, label="Quadratic", info="High values make low probablities much lower.")
                 with gr.Column():
@@ -324,87 +342,32 @@ def build_interface():
             fn=update_ui,
             inputs=[model_choice],
             outputs=[
-                text,
-                language,
-                speaker_audio,
-                prefix_audio,
-                emotion1,
-                emotion2,
-                emotion3,
-                emotion4,
-                emotion5,
-                emotion6,
-                emotion7,
-                emotion8,
-                vq_single_slider,
-                fmax_slider,
-                pitch_std_slider,
-                speaking_rate_slider,
-                dnsmos_slider,
-                speaker_noised_checkbox,
-                unconditional_keys,
+                text, language, speaker_audio, prefix_audio,
+                emotion1, emotion2, emotion3, emotion4, emotion5, emotion6, emotion7, emotion8,
+                vq_single_slider, fmax_slider, pitch_std_slider, speaking_rate_slider,
+                dnsmos_slider, speaker_noised_checkbox, unconditional_keys,
             ],
         )
 
-        # On page load, trigger the same UI refresh
         demo.load(
             fn=update_ui,
             inputs=[model_choice],
             outputs=[
-                text,
-                language,
-                speaker_audio,
-                prefix_audio,
-                emotion1,
-                emotion2,
-                emotion3,
-                emotion4,
-                emotion5,
-                emotion6,
-                emotion7,
-                emotion8,
-                vq_single_slider,
-                fmax_slider,
-                pitch_std_slider,
-                speaking_rate_slider,
-                dnsmos_slider,
-                speaker_noised_checkbox,
-                unconditional_keys,
+                text, language, speaker_audio, prefix_audio,
+                emotion1, emotion2, emotion3, emotion4, emotion5, emotion6, emotion7, emotion8,
+                vq_single_slider, fmax_slider, pitch_std_slider, speaking_rate_slider,
+                dnsmos_slider, speaker_noised_checkbox, unconditional_keys,
             ],
         )
 
-        # Generate audio on button click
         generate_button.click(
             fn=generate_audio,
             inputs=[
-                model_choice,
-                text,
-                language,
-                speaker_audio,
-                prefix_audio,
-                emotion1,
-                emotion2,
-                emotion3,
-                emotion4,
-                emotion5,
-                emotion6,
-                emotion7,
-                emotion8,
-                vq_single_slider,
-                fmax_slider,
-                pitch_std_slider,
-                speaking_rate_slider,
-                dnsmos_slider,
-                speaker_noised_checkbox,
-                cfg_scale_slider,
-                top_p_slider,
-                min_k_slider,
-                min_p_slider,
-                linear_slider,
-                confidence_slider,
-                quadratic_slider,
-                seed_number,
-                randomize_seed_toggle,
+                model_choice, text, language, speaker_audio, prefix_audio,
+                emotion1, emotion2, emotion3, emotion4, emotion5, emotion6, emotion7, emotion8,
+                vq_single_slider, fmax_slider, pitch_std_slider, speaking_rate_slider, dnsmos_slider,
+                speaker_noised_checkbox, cfg_scale_slider, top_p_slider, min_k_slider, min_p_slider,
+                linear_slider, confidence_slider, quadratic_slider, seed_number, randomize_seed_toggle,
                 unconditional_keys,
             ],
             outputs=[output_audio, seed_number],
@@ -414,6 +377,20 @@ def build_interface():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Launch the Zonos Gradio App.")
+    parser.add_argument(
+        "--inbrowser",
+        action="store_true",
+        help="If passed, launches the app in a new browser tab."
+    )
+    args = parser.parse_args()
+
     demo = build_interface()
     share = getenv("GRADIO_SHARE", "False").lower() in ("true", "1", "t")
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=share)
+
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=share,
+        inbrowser=args.inbrowser
+    )
