@@ -1,3 +1,4 @@
+import os  # Added for path operations
 import json
 from typing import Callable
 
@@ -54,13 +55,39 @@ class Zonos(nn.Module):
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
+    # --- START: MODIFIED from_pretrained method ---
     @classmethod
     def from_pretrained(
         cls, repo_id: str, revision: str | None = None, device: str = DEFAULT_DEVICE, **kwargs
     ) -> "Zonos":
-        config_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=revision)
-        model_path = hf_hub_download(repo_id=repo_id, filename="model.safetensors", revision=revision)
+        # Sanitize the repo_id to create a valid folder name for local storage
+        # Example: "Zyphra/Zonos-v0.1-transformer" -> "Zyphra_Zonos-v0.1-transformer"
+        sanitized_repo_id = repo_id.replace("/", "_")
+
+        # Define a target directory inside a 'models' folder in the current directory
+        target_dir = os.path.join(os.getcwd(), "models", sanitized_repo_id)
+
+        # Create the directory if it doesn't exist
+        os.makedirs(target_dir, exist_ok=True)
+        print(f"Models will be downloaded to: {target_dir}")
+
+        # Download the model files directly to the target directory
+        config_path = hf_hub_download(
+            repo_id=repo_id,
+            filename="config.json",
+            revision=revision,
+            local_dir=target_dir,
+            local_dir_use_symlinks=False,  # Set to False to copy files, not link
+        )
+        model_path = hf_hub_download(
+            repo_id=repo_id,
+            filename="model.safetensors",
+            revision=revision,
+            local_dir=target_dir,
+            local_dir_use_symlinks=False, # Set to False to copy files, not link
+        )
         return cls.from_local(config_path, model_path, device, **kwargs)
+    # --- END: MODIFIED from_pretrained method ---
 
     @classmethod
     def from_local(

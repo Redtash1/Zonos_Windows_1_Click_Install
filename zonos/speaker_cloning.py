@@ -1,4 +1,5 @@
 import math
+import os  # Added for path operations
 from functools import cache
 
 import torch
@@ -386,15 +387,34 @@ class SpeakerEmbedding(nn.Module):
 
 
 class SpeakerEmbeddingLDA(nn.Module):
+    # --- START: MODIFIED __init__ method ---
     def __init__(self, device: str = DEFAULT_DEVICE):
         super().__init__()
+        
+        repo_id = "Zyphra/Zonos-v0.1-speaker-embedding"
+        
+        # Sanitize the repo_id to create a valid local folder name
+        sanitized_repo_id = repo_id.replace("/", "_")
+        
+        # Define a target directory inside a 'models' folder in the current directory
+        target_dir = os.path.join(os.getcwd(), "models", sanitized_repo_id)
+        
+        # Create the directory if it doesn't exist
+        os.makedirs(target_dir, exist_ok=True)
+        print(f"Speaker embedding models will be downloaded to: {target_dir}")
+
+        # Download the model files to the specified local directory
         spk_model_path = hf_hub_download(
-            repo_id="Zyphra/Zonos-v0.1-speaker-embedding",
+            repo_id=repo_id,
             filename="ResNet293_SimAM_ASP_base.pt",
+            local_dir=target_dir,
+            local_dir_use_symlinks=False,
         )
         lda_spk_model_path = hf_hub_download(
-            repo_id="Zyphra/Zonos-v0.1-speaker-embedding",
+            repo_id=repo_id,
             filename="ResNet293_SimAM_ASP_base_LDA-128.pt",
+            local_dir=target_dir,
+            local_dir_use_symlinks=False,
         )
 
         self.device = device
@@ -406,6 +426,7 @@ class SpeakerEmbeddingLDA(nn.Module):
             self.lda.load_state_dict(lda_sd)
 
         self.requires_grad_(False).eval()
+    # --- END: MODIFIED __init__ method ---
 
     def forward(self, wav: torch.Tensor, sample_rate: int):
         emb = self.model(wav, sample_rate).to(torch.float32)
