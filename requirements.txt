@@ -1,0 +1,14 @@
+gradio>=5.15.0
+huggingface-hub>=0.28.1
+inflect>=7.5.0
+kanjize>=1.5.0
+numpy>=2.2.2
+packaging
+phonemizer>=3.3.0
+setuptools
+soundfile>=0.13.1
+sudachidict-full>=20241021
+sudachipy>=0.6.10
+transformers>=4.48.1
+torch>=2.5.1
+torchaudio>=2.5.1
